@@ -320,13 +320,12 @@ function showLoading(show) {
 // Stooq symbol 對照表（Yahoo symbol → Stooq symbol）
 const STOOQ_MAP = {
     'QQQ': 'qqq.us', 'TSLA': 'tsla.us', 'NVDA': 'nvda.us', 'AAPL': 'aapl.us',
-    '2330.TW': '2330.tw', '0050.TW': '0050.tw', 'GC=F': 'gc.f'
+    '2330.TW': '2330.tw', '0050.TW': '0050.tw', 'GC=F': 'gc.f',
+    'BTC-USD': 'btc.v', 'ETH-USD': 'eth.v', 'ADA-USD': 'ada.v'
 };
 
-// 加密貨幣 CoinGecko ID 對照表
-const COINGECKO_MAP = {
-    'BTC-USD': 'bitcoin', 'ETH-USD': 'ethereum', 'ADA-USD': 'cardano'
-};
+// 加密貨幣 CoinGecko ID 對照表（已改用 Stooq，保留為備用）
+const COINGECKO_MAP = {};
 
 function parseStooqCsv(text) {
     if (!text || !text.includes(',') || text.trim().length < 20) throw new Error('格式異常');
