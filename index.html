@@ -334,13 +334,17 @@ function parseStooqCsv(text) {
     const lines = text.trim().split('\n');
     const monthly = new Map();
     lines.slice(1).forEach(line => {
-        const cols = line.split(',');
+        const cols  = line.split(',');
         if (cols.length < 5) return;
         const dateStr = cols[0].trim();
+        const open    = parseFloat(cols[1]);
+        const high    = parseFloat(cols[2]);
+        const low     = parseFloat(cols[3]);
         const close   = parseFloat(cols[4]);
-        if (!dateStr || isNaN(close) || close <= 0) return;
+        if (!dateStr || [open,high,low,close].some(v => isNaN(v) || v <= 0)) return;
+        const avg = (open + high + low + close) / 4; // 月均價
         const key = dateStr.slice(0, 7);
-        if (!monthly.has(key)) monthly.set(key, close);
+        if (!monthly.has(key)) monthly.set(key, avg);
     });
     return monthly;
 }
@@ -435,14 +439,18 @@ async function fetchAssetData(assetName, yahooSymbol) {
         const result = json.chart && json.chart.result && json.chart.result[0];
         if (!result) throw new Error('無資料');
         const timestamps = result.timestamp || [];
+        const opens      = (result.indicators.quote[0].open)  || [];
+        const highs      = (result.indicators.quote[0].high)  || [];
+        const lows       = (result.indicators.quote[0].low)   || [];
         const closes     = (result.indicators.quote[0].close) || [];
         const monthly    = new Map();
         timestamps.forEach((ts, i) => {
-            const close = closes[i];
-            if (close === null || close === undefined || isNaN(close) || close <= 0) return;
+            const o = opens[i], h = highs[i], l = lows[i], c = closes[i];
+            if ([o,h,l,c].some(v => v === null || v === undefined || isNaN(v) || v <= 0)) return;
+            const avg = (o + h + l + c) / 4;
             const d   = new Date(ts * 1000);
-            const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-            monthly.set(key, close);
+            const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'00');
+            monthly.set(key, avg);
         });
         if (monthly.size > 0) {
             priceCache[assetName] = monthly;
