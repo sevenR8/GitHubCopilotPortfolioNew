@@ -472,9 +472,12 @@ async function fetchDailyPrices(dateStr) {
 
     const result = {};
     const d = new Date(dateStr);
-    // 往前找5個交易日，避免假日無資料
-    const d1 = new Date(d); d1.setDate(d1.getDate() - 5);
-    const d2 = new Date(d); d2.setDate(d2.getDate() + 1);
+    const today = new Date();
+    // d2 不超過今天，避免抓到未來日期
+    const d2 = d < today ? new Date(d) : new Date(today);
+    d2.setDate(d2.getDate() + 1);
+    // d1 往前找最多 7 天，確保能找到最近的交易日（跨假日/國定假日）
+    const d1 = new Date(d); d1.setDate(d1.getDate() - 7);
     const d1Str = d1.toISOString().slice(0,10).replace(/-/g,'');
     const d2Str = d2.toISOString().slice(0,10).replace(/-/g,'');
 
@@ -487,7 +490,8 @@ async function fetchDailyPrices(dateStr) {
             if (!text || !text.includes(',')) return;
             const lines = text.trim().split('\n').slice(1).filter(l => l.trim());
             if (lines.length === 0) return;
-            // 取最接近目標日期的那筆（最後一筆）
+            // 取最接近目標日期的最後一筆交易日收盤價
+            // （若當天是交易日就是當天，若是假日則為前一個交易日）
             const last = lines[lines.length - 1].split(',');
             const close = parseFloat(last[4]);
             if (!isNaN(close) && close > 0) result[name] = close;
