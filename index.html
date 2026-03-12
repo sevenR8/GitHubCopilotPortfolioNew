@@ -678,16 +678,14 @@ function updateChart() {
 
     // 更新每個資產的投入金額顯示
     const wtSym = currency === 'TWD' ? 'NT$' : '$';
-    document.querySelectorAll('#weightContainer > div').forEach(wrapper => {
-        const input  = wrapper.querySelector('.asset-weight');
-        const amtEl  = wrapper.querySelector('.asset-amount');
-        if (!input || !amtEl) return;
+    document.querySelectorAll('.asset-weight').forEach(input => {
+        const amtEl = input.parentElement.querySelector('.asset-amount');
+        if (!amtEl) return;
         const assetName = input.dataset.asset;
         const w = parseFloat(input.value) || 0;
         if (w <= 0) { amtEl.textContent = ''; return; }
         const cfg = ASSET_CONFIG[assetName];
         let amt = totalCap * (w / 100);
-        // 若資產是 TWD 計價，換算顯示
         if (currency === 'USD' && cfg && cfg.currency === 'TWD') amt = amt / TWD_RATE;
         if (currency === 'TWD' && cfg && cfg.currency === 'USD') amt = amt * TWD_RATE;
         amtEl.textContent = wtSym + Math.round(amt).toLocaleString();
