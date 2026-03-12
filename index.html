@@ -967,6 +967,17 @@ function updateChart() {
         fetchDailyPrices(startStr),
         fetchDailyPrices(endStr)
     ]).then(([startPrices, endPrices]) => {
+        // 更新圖表第一個點（開始日）的精確價格
+        if (startPrices && chartInstance) {
+            chartInstance.data.datasets.forEach(ds => {
+                if (!ds.actualPrices || !ds.label) return;
+                const assetName = Object.keys(ASSET_CONFIG).find(n => ds.label.startsWith(n));
+                if (assetName && startPrices[assetName]) {
+                    ds.actualPrices[0] = startPrices[assetName];
+                }
+            });
+            chartInstance.update('none');
+        }
         updatePnLDisplay(startPrices, endPrices);
     });
 
