@@ -392,6 +392,26 @@ async function fetchAssetData(assetName, yahooSymbol) {
             const text    = await fetchWithTimeout('https://old-sound-8325.nonore1111.workers.dev/?url=' + encodeURIComponent(stooqUrl), 6000);
             const monthly = parseStooqCsv(text);
             if (monthly.size > 0) {
+                // 補充當月日線均價（本月月線尚未結算）
+                const today = new Date();
+                const curKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0');
+                if (!monthly.has(curKey)) {
+                    try {
+                        const d1m = curKey.replace('-','') + '01';
+                        const dailyUrl = 'https://stooq.com/q/d/l/?s=' + stooqSym + '&d1=' + d1m + '&d2=' + d2 + '&i=d';
+                        const dt = await fetchWithTimeout('https://old-sound-8325.nonore1111.workers.dev/?url=' + encodeURIComponent(dailyUrl), 5000);
+                        const dlines = dt.trim().split('\n').slice(1).filter(l => l.trim());
+                        if (dlines.length > 0) {
+                            let sumAvg = 0, cnt = 0;
+                            dlines.forEach(line => {
+                                const c = line.split(',');
+                                const o = parseFloat(c[1]), h = parseFloat(c[2]), l = parseFloat(c[3]), cl = parseFloat(c[4]);
+                                if ([o,h,l,cl].every(v => !isNaN(v) && v > 0)) { sumAvg += (o+h+l+cl)/4; cnt++; }
+                            });
+                            if (cnt > 0) { monthly.set(curKey, sumAvg / cnt); console.log('✅ ' + assetName + ' 補充當月均價：' + (sumAvg/cnt).toFixed(2)); }
+                        }
+                    } catch(e) { /* 靜默失敗 */ }
+                }
                 priceCache[assetName] = monthly;
                 console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (Stooq via Worker)');
                 return;
