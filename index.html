@@ -16,7 +16,7 @@
 <div class="max-w-6xl mx-auto">
     <h1 class="text-3xl font-bold text-emerald-400 mb-2">投資組合損益模擬器</h1>
     <p class="mb-8 text-slate-400 border-l-4 border-emerald-500 pl-4">
-        資料來源：<span class="text-emerald-400 font-bold">Yahoo Finance（主要）／ CoinGecko、Stooq（備援）</span>
+        資料來源：<span class="text-emerald-400 font-bold">Stooq（主要）／ CoinGecko（加密貨幣）／ Yahoo Finance（備援）</span>
         <span id="dataStatus" class="ml-3 text-yellow-400 text-xs">⏳ 資料載入中....</span>
     </p>
 
@@ -129,7 +129,7 @@
                 <p class="text-xs text-slate-500 mt-1">以結束日期當月收盤計算，持有整段期間的組合損益</p>
                 <div class="mt-4 pt-3 border-t border-slate-600 flex items-center justify-between gap-4">
                     <div>
-                        <span class="text-xs text-slate-500 block mb-0.5">投入本金</span>
+                        <span class="text-xs text-slate-400 block mb-0.5">投入本金</span>
                         <p id="principalDisplay" class="text-2xl font-black text-slate-300">$0</p>
                     </div>
                     <div class="text-slate-500 text-2xl font-thin">→</div>
@@ -212,20 +212,21 @@ const FALLBACK = {
     'ADA 幣':        { 0:100,5:38,10:25,14:29,17:23,20:20,23:48,26:45,29:34,32:28,34:54,35:77,38:54,40:58,41:50,44:35,47:25,50:20 },
     '黃金 (GOLD)':   { 0:100,5:97,10:98,14:99,17:99,20:98,23:107,26:112,29:119,32:129,34:139,35:138,38:135,41:135,44:138,47:143,50:148 },
     '台積電 (TSM)':  { 0:100,3:78,9:62,12:74,18:87,24:108,30:153,33:169,36:179,38:134,41:145,44:161,47:169,50:313 },
-    '台股 0050':     { 0:100,5:84,10:81,14:90,19:100,24:107,30:118,34:118,38:110,42:109,46:107,50:115 }
+    '台股 0050':     { 0:100,5:81,10:76,14:86,19:103,24:114,30:141,34:157,38:157,42:184,46:195,50:207 }
 };
 const FALLBACK_BASE = {
     '美股 QQQ':390,'特斯拉 (TSLA)':330,'輝達 (NVDA)':270,'蘋果 (AAPL)':175,
     '比特幣 (BTC)':38000,'以太幣 (ETH)':2800,'ADA 幣':1.30,'黃金 (GOLD)':1800,
-    '台積電 (TSM)':620,'台股 0050':68
+    '台積電 (TSM)':620,'台股 0050':37
 };
 
 const priceCache = {};
 let chartInstance = null;
 let currency = 'TWD';
 const TWD_RATE = 32;
-// 多個 CORS Proxy 備援，自動切換
+// 多個 CORS Proxy 備援，自動切換（自架 Cloudflare Worker 優先）
 const PROXIES = [
+    url => 'https://old-sound-8325.nonore1111.workers.dev/?url=' + encodeURIComponent(url),
     url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
     url => 'https://corsproxy.io/?' + encodeURIComponent(url),
     url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url)
@@ -316,104 +317,142 @@ function showLoading(show) {
     if (el) el.style.display = show ? 'flex' : 'none';
 }
 
-async function fetchYahoo(assetName, yahooSymbol) {
-    if (priceCache[assetName] !== undefined) return;
-    setLoadingDetail('載入 ' + assetName + '（Yahoo: ' + yahooSymbol + '）...');
+// Stooq symbol 對照表（Yahoo symbol → Stooq symbol）
+const STOOQ_MAP = {
+    'QQQ': 'qqq.us', 'TSLA': 'tsla.us', 'NVDA': 'nvda.us', 'AAPL': 'aapl.us',
+    '2330.TW': '2330.tw', '0050.TW': '0050.tw', 'GC=F': 'gc.f'
+};
 
-    const period1 = Math.floor(new Date('2020-01-01').getTime() / 1000);
-    const period2 = Math.floor(Date.now() / 1000);
-    const yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
-                     encodeURIComponent(yahooSymbol) +
-                     '?period1=' + period1 + '&period2=' + period2 +
-                     '&interval=1mo&includePrePost=false';
+// 加密貨幣 CoinGecko ID 對照表
+const COINGECKO_MAP = {
+    'BTC-USD': 'bitcoin', 'ETH-USD': 'ethereum', 'ADA-USD': 'cardano'
+};
+
+function parseStooqCsv(text) {
+    if (!text || !text.includes(',') || text.trim().length < 20) throw new Error('格式異常');
+    const lines = text.trim().split('\n');
+    const monthly = new Map();
+    lines.slice(1).forEach(line => {
+        const cols = line.split(',');
+        if (cols.length < 5) return;
+        const dateStr = cols[0].trim();
+        const close   = parseFloat(cols[4]);
+        if (!dateStr || isNaN(close) || close <= 0) return;
+        const key = dateStr.slice(0, 7);
+        if (!monthly.has(key)) monthly.set(key, close);
+    });
+    return monthly;
+}
+
+async function fetchAssetData(assetName, yahooSymbol) {
+    if (priceCache[assetName] !== undefined) return;
+    const d2 = new Date().toISOString().slice(0,10).replace(/-/g,'');
+
+    // ── 加密貨幣：CoinGecko 直連（有 CORS，免 Proxy）──────────────────
+    if (COINGECKO_MAP[yahooSymbol]) {
+        const geckoId = COINGECKO_MAP[yahooSymbol];
+        setLoadingDetail('載入 ' + assetName + '（CoinGecko）...');
+        const from = Math.floor(new Date('2020-01-01').getTime() / 1000);
+        const to   = Math.floor(Date.now() / 1000);
+        const url  = 'https://api.coingecko.com/api/v3/coins/' + geckoId +
+                     '/market_chart/range?vs_currency=usd&from=' + from + '&to=' + to;
+        try {
+            const res  = await fetchWithTimeout(url, 6000);
+            const json = JSON.parse(res);
+            const monthly = new Map();
+            (json.prices || []).forEach(item => {
+                const d   = new Date(item[0]);
+                const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+                if (!monthly.has(key)) monthly.set(key, item[1]);
+            });
+            if (monthly.size > 0) {
+                priceCache[assetName] = monthly;
+                console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (CoinGecko)');
+                return;
+            }
+        } catch(e) {
+            console.warn('❌ CoinGecko ' + assetName + ' 失敗：' + e.message);
+        }
+        priceCache[assetName] = null;
+        return;
+    }
+
+    // ── 股票/ETF/黃金：Stooq 直連為主 ────────────────────────────────
+    const stooqSym = STOOQ_MAP[yahooSymbol];
+    if (stooqSym) {
+        setLoadingDetail('載入 ' + assetName + '（Stooq）...');
+        const stooqUrl = 'https://stooq.com/q/d/l/?s=' + stooqSym + '&d1=20200101&d2=' + d2 + '&i=m';
+        // 1) 透過自架 Worker（最優先，CORS 無問題）
+        try {
+            const text    = await fetchWithTimeout('https://old-sound-8325.nonore1111.workers.dev/?url=' + encodeURIComponent(stooqUrl), 6000);
+            const monthly = parseStooqCsv(text);
+            if (monthly.size > 0) {
+                priceCache[assetName] = monthly;
+                console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (Stooq via Worker)');
+                return;
+            }
+        } catch(e) {
+            console.warn('⚠️ Worker ' + assetName + ' 失敗：' + e.message + '，試直連...');
+        }
+        // 2) 直連備援
+        try {
+            const text    = await fetchWithTimeout(stooqUrl, 6000);
+            const monthly = parseStooqCsv(text);
+            if (monthly.size > 0) {
+                priceCache[assetName] = monthly;
+                console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (Stooq 直連)');
+                return;
+            }
+        } catch(e) {
+            console.warn('⚠️ Stooq 直連 ' + assetName + ' 失敗：' + e.message + '，試 Proxy...');
+        }
+        // 2) 透過 Proxy 備援
+        try {
+            const text    = await fetchWithProxy(stooqUrl);
+            const monthly = parseStooqCsv(text);
+            if (monthly.size > 0) {
+                priceCache[assetName] = monthly;
+                console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (Stooq+Proxy)');
+                return;
+            }
+        } catch(e) {
+            console.warn('❌ Stooq+Proxy ' + assetName + ' 失敗：' + e.message);
+        }
+    }
+
+    // ── 最後備援：Yahoo Finance（透過 Proxy）─────────────────────────
+    setLoadingDetail('載入 ' + assetName + '（Yahoo 備援）...');
+    const period1   = Math.floor(new Date('2020-01-01').getTime() / 1000);
+    const period2   = Math.floor(Date.now() / 1000);
+    const yahooUrl  = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
+                      encodeURIComponent(yahooSymbol) +
+                      '?period1=' + period1 + '&period2=' + period2 +
+                      '&interval=1mo&includePrePost=false';
     try {
-        const text = await fetchWithProxy(yahooUrl);
-        const json = JSON.parse(text);
+        const text   = await fetchWithProxy(yahooUrl);
+        const json   = JSON.parse(text);
         const result = json.chart && json.chart.result && json.chart.result[0];
         if (!result) throw new Error('無資料');
-
         const timestamps = result.timestamp || [];
-        const closes = (result.indicators.quote[0].close) || [];
-        const monthly = new Map();
+        const closes     = (result.indicators.quote[0].close) || [];
+        const monthly    = new Map();
         timestamps.forEach((ts, i) => {
             const close = closes[i];
             if (close === null || close === undefined || isNaN(close) || close <= 0) return;
-            const d = new Date(ts * 1000);
+            const d   = new Date(ts * 1000);
             const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
             monthly.set(key, close);
         });
-        priceCache[assetName] = monthly.size > 0 ? monthly : null;
-        console.log('✅ ' + assetName + ': ' + (monthly.size) + ' 個月 (Yahoo Finance)');
-    } catch(e) {
-        console.warn('❌ Yahoo ' + assetName + ' 失敗：' + e.message + '，嘗試 CoinGecko/Stooq 備援...');
-        // 備援：加密貨幣試 CoinGecko
-        const cfg = ASSET_CONFIG[assetName];
-        if (cfg && cfg.yahoo && cfg.yahoo.endsWith('-USD')) {
-            await fetchCoinGeckoFallback(assetName, cfg.yahoo.replace('-USD','').toLowerCase());
-        } else if (cfg && cfg.yahoo) {
-            await fetchStooqFallback(assetName, cfg.yahoo);
+        if (monthly.size > 0) {
+            priceCache[assetName] = monthly;
+            console.log('✅ ' + assetName + ': ' + monthly.size + ' 個月 (Yahoo 備援)');
+            return;
         }
-    }
-}
-
-async function fetchCoinGeckoFallback(assetName, coinId) {
-    if (priceCache[assetName]) return;
-    const coinMap = { 'btc': 'bitcoin', 'eth': 'ethereum', 'ada': 'cardano' };
-    const geckoId = coinMap[coinId] || coinId;
-    setLoadingDetail('備援載入 ' + assetName + '（CoinGecko）...');
-    const from = Math.floor(new Date('2020-01-01').getTime() / 1000);
-    const to   = Math.floor(Date.now() / 1000);
-    const url  = 'https://api.coingecko.com/api/v3/coins/' + geckoId +
-                 '/market_chart/range?vs_currency=usd&from=' + from + '&to=' + to;
-    try {
-        const res  = await fetchWithTimeout(url, 5000);
-        const json = JSON.parse(res);
-        const monthly = new Map();
-        (json.prices || []).forEach(item => {
-            const d   = new Date(item[0]);
-            const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
-            if (!monthly.has(key)) monthly.set(key, item[1]);
-        });
-        priceCache[assetName] = monthly.size > 0 ? monthly : null;
-        if (priceCache[assetName]) console.log('✅ ' + assetName + ': CoinGecko 備援成功');
     } catch(e) {
-        console.warn('❌ CoinGecko 備援 ' + assetName + ' 失敗：' + e.message);
-        if (!priceCache[assetName]) priceCache[assetName] = null;
+        console.warn('❌ Yahoo 備援 ' + assetName + ' 失敗：' + e.message);
     }
-}
 
-async function fetchStooqFallback(assetName, symbol) {
-    if (priceCache[assetName]) return;
-    // 轉換 Yahoo symbol 到 Stooq symbol
-    const stooqMap = {
-        'QQQ': 'QQQ.US', 'TSLA': 'TSLA.US', 'NVDA': 'NVDA.US', 'AAPL': 'AAPL.US',
-        '2330.TW': '2330.TW', '0050.TW': '0050.TW', 'GC=F': 'GC.F'
-    };
-    const stooqSym = stooqMap[symbol] || symbol;
-    setLoadingDetail('備援載入 ' + assetName + '（Stooq）...');
-    const d2       = new Date().toISOString().slice(0,10).replace(/-/g,'');
-    const stooqUrl = 'https://stooq.com/q/d/l/?s=' + stooqSym.toLowerCase() +
-                     '&d1=20200101&d2=' + d2 + '&i=m';
-    try {
-        const text = await fetchWithProxy(stooqUrl);
-        if (!text.includes(',') || text.trim().length < 20) throw new Error('格式異常');
-        const lines   = text.trim().split('\n');
-        const monthly = new Map();
-        lines.slice(1).forEach(line => {
-            const cols  = line.split(',');
-            if (cols.length < 5) return;
-            const dateStr = cols[0].trim();
-            const close   = parseFloat(cols[4]);
-            if (!dateStr || isNaN(close) || close <= 0) return;
-            const key = dateStr.slice(0, 7);
-            if (!monthly.has(key)) monthly.set(key, close);
-        });
-        priceCache[assetName] = monthly.size > 0 ? monthly : null;
-        if (priceCache[assetName]) console.log('✅ ' + assetName + ': Stooq 備援成功');
-    } catch(e) {
-        console.warn('❌ Stooq 備援 ' + assetName + ' 失敗：' + e.message);
-        if (!priceCache[assetName]) priceCache[assetName] = null;
-    }
+    priceCache[assetName] = null;
 }
 
 function getFallbackPrice(assetName, yearMonth) {
@@ -530,7 +569,7 @@ async function loadAllData() {
     showLoading(true);
     // 全部並行載入，最大化速度
     const names = Object.keys(ASSET_CONFIG);
-    await Promise.all(names.map(name => fetchYahoo(name, ASSET_CONFIG[name].yahoo)));
+    await Promise.all(names.map(name => fetchAssetData(name, ASSET_CONFIG[name].yahoo)));
     const parts = names.map(name => {
         const ok = priceCache[name] && priceCache[name].size > 0;
         return name + '：' + (ok ? '✅真實' : '⚠️模擬');
