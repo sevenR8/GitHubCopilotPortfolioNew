@@ -908,6 +908,7 @@ function updateChart() {
     const endPct  = portfolioSeries[portfolioSeries.length - 1];
     const sym = currency === 'TWD' ? 'NT$' : '$';
     document.getElementById('principalDisplay').textContent = sym + Math.round(totalCap).toLocaleString();
+    const endPctEl   = document.getElementById('endPctDisplay');
     const endMoneyEl = document.getElementById('endMoneyDisplay');
 
     // 先用月均價顯示，再用精確日線修正
