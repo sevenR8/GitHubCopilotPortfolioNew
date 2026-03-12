@@ -556,6 +556,7 @@ function initInputs() {
         wrapper.innerHTML =
             '<span class="w-2 h-2 rounded-full flex-shrink-0" style="background:' + cfg.color + '"></span>' +
             '<span class="text-xs font-medium text-slate-300 flex-1">' + name + '</span>' +
+            '<span class="asset-amount text-xs text-slate-500 w-20 text-right"></span>' +
             '<input type="number" data-asset="' + name + '" value="' + (defaultWeights[name]||0) + '" min="0" max="100"' +
             ' class="asset-weight bg-slate-900 border border-slate-700 rounded p-1 w-16 text-right text-emerald-400 focus:border-emerald-500 outline-none"' +
             ' onchange="updateChart()">' +
@@ -673,6 +674,23 @@ function updateChart() {
         const w = parseFloat(el.value) || 0;
         weights[el.dataset.asset] = w / 100;
         totalW += w;
+    });
+
+    // 更新每個資產的投入金額顯示
+    const wtSym = currency === 'TWD' ? 'NT$' : '$';
+    document.querySelectorAll('#weightContainer > div').forEach(wrapper => {
+        const input  = wrapper.querySelector('.asset-weight');
+        const amtEl  = wrapper.querySelector('.asset-amount');
+        if (!input || !amtEl) return;
+        const assetName = input.dataset.asset;
+        const w = parseFloat(input.value) || 0;
+        if (w <= 0) { amtEl.textContent = ''; return; }
+        const cfg = ASSET_CONFIG[assetName];
+        let amt = totalCap * (w / 100);
+        // 若資產是 TWD 計價，換算顯示
+        if (currency === 'USD' && cfg && cfg.currency === 'TWD') amt = amt / TWD_RATE;
+        if (currency === 'TWD' && cfg && cfg.currency === 'USD') amt = amt * TWD_RATE;
+        amtEl.textContent = wtSym + Math.round(amt).toLocaleString();
     });
     const wtEl   = document.getElementById('weightTotal');
     const warnEl = document.getElementById('weightWarning');
