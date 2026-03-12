@@ -464,6 +464,41 @@ async function fetchAssetData(assetName, yahooSymbol) {
     priceCache[assetName] = null;
 }
 
+// 抓取指定日期的精確收盤價（用於開始日/結束日的損益計算）
+// dateStr: 'YYYY-MM-DD'，回傳 { [assetName]: price } 的 Map
+async function fetchDailyPrices(dateStr) {
+    const names = Object.keys(ASSET_CONFIG).filter(n => (weights_global[n] || 0) > 0);
+    if (names.length === 0) return {};
+
+    const result = {};
+    const d = new Date(dateStr);
+    // 往前找5個交易日，避免假日無資料
+    const d1 = new Date(d); d1.setDate(d1.getDate() - 5);
+    const d2 = new Date(d); d2.setDate(d2.getDate() + 1);
+    const d1Str = d1.toISOString().slice(0,10).replace(/-/g,'');
+    const d2Str = d2.toISOString().slice(0,10).replace(/-/g,'');
+
+    await Promise.all(names.map(async name => {
+        const stooqSym = STOOQ_MAP[ASSET_CONFIG[name].yahoo];
+        if (!stooqSym) return;
+        try {
+            const url  = 'https://stooq.com/q/d/l/?s=' + stooqSym + '&d1=' + d1Str + '&d2=' + d2Str + '&i=d';
+            const text = await fetchWithTimeout('https://old-sound-8325.nonore1111.workers.dev/?url=' + encodeURIComponent(url), 6000);
+            if (!text || !text.includes(',')) return;
+            const lines = text.trim().split('\n').slice(1).filter(l => l.trim());
+            if (lines.length === 0) return;
+            // 取最接近目標日期的那筆（最後一筆）
+            const last = lines[lines.length - 1].split(',');
+            const close = parseFloat(last[4]);
+            if (!isNaN(close) && close > 0) result[name] = close;
+        } catch(e) { /* 靜默失敗，回退月均價 */ }
+    }));
+    return result;
+}
+
+// 全域儲存當前 weights，供 fetchDailyPrices 使用
+let weights_global = {};
+
 function getFallbackPrice(assetName, yearMonth) {
     const anchors   = FALLBACK[assetName];
     const basePrice = FALLBACK_BASE[assetName];
@@ -705,6 +740,7 @@ function updateChart() {
         weights[el.dataset.asset] = w / 100;
         totalW += w;
     });
+    weights_global = weights; // 供 fetchDailyPrices 使用
 
     // 更新每個資產的投入金額顯示
     const wtSym = currency === 'TWD' ? 'NT$' : '$';
@@ -866,21 +902,48 @@ function updateChart() {
     const maxGain = Math.max(...portfolioSeries);
     const maxDd   = Math.min(...portfolioSeries);
     const endPct  = portfolioSeries[portfolioSeries.length - 1];
-
-    const endPctEl   = document.getElementById('endPctDisplay');
-    const endMoneyEl = document.getElementById('endMoneyDisplay');
-    endPctEl.textContent   = (endPct >= 0 ? '+' : '') + endPct.toFixed(2) + '%';
-    endMoneyEl.textContent = (endPct >= 0 ? '+' : '-') + formatMoneyAmt(totalCap * Math.abs(endPct) / 100);
-    endPctEl.className   = 'text-4xl font-black ' + (endPct >= 0 ? 'text-emerald-400' : 'text-red-400');
-    endMoneyEl.className = 'text-2xl font-black ' + (endPct >= 0 ? 'text-emerald-400' : 'text-red-400');
-
-    // 目前總資產 = 本金 × (1 + 報酬率)
     const sym = currency === 'TWD' ? 'NT$' : '$';
     document.getElementById('principalDisplay').textContent = sym + Math.round(totalCap).toLocaleString();
-    const currentAssets = totalCap * (1 + endPct / 100);
-    const curEl = document.getElementById('currentAssetsDisplay');
-    curEl.textContent = sym + Math.round(currentAssets).toLocaleString();
-    curEl.className   = 'text-2xl font-black ' + (endPct >= 0 ? 'text-emerald-400' : 'text-red-400');
+    const endMoneyEl = document.getElementById('endMoneyDisplay');
+
+    // 先用月均價顯示，再用精確日線修正
+    function updatePnLDisplay(startPrices, endPrices) {
+        let exactEndPct = null;
+        if (startPrices && endPrices && Object.keys(startPrices).length > 0) {
+            let totalStart = 0, totalEnd = 0;
+            Object.keys(ASSET_CONFIG).forEach(name => {
+                const w = weights[name] || 0;
+                if (w <= 0) return;
+                const sp = startPrices[name];
+                const ep = endPrices[name];
+                if (!sp || !ep) return;
+                totalStart += w;
+                totalEnd   += w * (ep / sp);
+            });
+            if (totalStart > 0) exactEndPct = (totalEnd / totalStart - 1) * 100;
+        }
+        const pct = exactEndPct !== null ? exactEndPct : endPct;
+        endPctEl.textContent   = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+        endMoneyEl.textContent = (pct >= 0 ? '+' : '-') + formatMoneyAmt(totalCap * Math.abs(pct) / 100);
+        endPctEl.className   = 'text-4xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
+        endMoneyEl.className = 'text-2xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
+        const currentAssets = totalCap * (1 + pct / 100);
+        const curEl = document.getElementById('currentAssetsDisplay');
+        curEl.textContent = sym + Math.round(currentAssets).toLocaleString();
+        curEl.className   = 'text-2xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
+        if (exactEndPct !== null) console.log('✅ 精確日線損益：' + pct.toFixed(2) + '%（月均損益：' + endPct.toFixed(2) + '%）');
+    }
+
+    // 先以月均顯示
+    updatePnLDisplay(null, null);
+
+    // 非同步抓精確日線，完成後更新
+    Promise.all([
+        fetchDailyPrices(startStr),
+        fetchDailyPrices(endStr)
+    ]).then(([startPrices, endPrices]) => {
+        updatePnLDisplay(startPrices, endPrices);
+    });
 
     const gainEl = document.getElementById('maxGainPctDisplay');
     gainEl.textContent = (maxGain >= 0 ? '+' : '') + maxGain.toFixed(2) + '%';
