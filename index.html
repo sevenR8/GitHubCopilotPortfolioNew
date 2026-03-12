@@ -681,13 +681,9 @@ function updateChart() {
     document.querySelectorAll('.asset-weight').forEach(input => {
         const amtEl = input.parentElement.querySelector('.asset-amount');
         if (!amtEl) return;
-        const assetName = input.dataset.asset;
         const w = parseFloat(input.value) || 0;
         if (w <= 0) { amtEl.textContent = ''; return; }
-        const cfg = ASSET_CONFIG[assetName];
-        let amt = totalCap * (w / 100);
-        if (currency === 'USD' && cfg && cfg.currency === 'TWD') amt = amt / TWD_RATE;
-        if (currency === 'TWD' && cfg && cfg.currency === 'USD') amt = amt * TWD_RATE;
+        const amt = totalCap * (w / 100);
         amtEl.textContent = wtSym + Math.round(amt).toLocaleString();
     });
     const wtEl   = document.getElementById('weightTotal');
