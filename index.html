@@ -23,7 +23,7 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
-                <label class="block text-sm font-bold text-emerald-400 mb-2">1. 總投資金額 (本金)</label>
+                <label id="investCapLabel" class="block text-sm font-bold text-emerald-400 mb-2">1. 初期投入本金</label>
                 <input type="text" id="totalCap" value="1,000,000"
                        class="w-full bg-slate-900 p-3 rounded border border-slate-700 text-xl font-mono focus:border-emerald-500 outline-none"
                        oninput="validateCapInput(this)" onblur="formatCapInput(this)" onchange="updateChart()">
@@ -45,15 +45,23 @@
                 <div class="space-y-3">
                     <div>
                         <label class="text-xs text-slate-400 block mb-1">開始日期</label>
-                        <input type="date" id="startDate" value="2022-01-01" min="2020-01-01" max="2026-03-31"
+                        <input type="date" id="startDate" min="2020-01-01" max="2086-12-31"
                                class="w-full bg-slate-900 p-2 rounded border border-slate-700 text-emerald-400 focus:border-emerald-500 outline-none"
                                onchange="updateChart()">
                     </div>
                     <div>
                         <label class="text-xs text-slate-400 block mb-1">結束日期</label>
-                        <input type="date" id="endDate" value="2026-03-11" min="2020-01-01" max="2026-03-31"
+                        <input type="date" id="endDate" min="2020-01-01" max="2086-12-31"
                                class="w-full bg-slate-900 p-2 rounded border border-slate-700 text-emerald-400 focus:border-emerald-500 outline-none"
-                               onchange="updateChart()">
+                               onchange="toggleFutureSettings(); updateChart()">
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="setEndDateOffset(5)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">+5年</button>
+                            <button onclick="setEndDateOffset(10)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">+10年</button>
+                            <button onclick="setEndDateOffset(20)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">+20年</button>
+                            <button onclick="setEndDateOffset(30)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">+30年</button>
+                            <button onclick="setEndDateOffset(40)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">+40年</button>
+                            <button onclick="setEndDateOffset(60)" class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-red-400">+60年</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -82,7 +90,25 @@
                             <option value="semiannual">每半年</option>
                             <option value="annual">每年</option>
                         </select>
-                        <p class="text-xs text-slate-500 mt-1">總投資金額將平均分配到每期投入</p>
+                    </div>
+                    <div id="dcaAmountGroup" class="hidden">
+                        <label class="text-xs text-amber-400 block mb-1">每期定投金額</label>
+                        <input type="text" id="dcaAmount" value="50,000"
+                               class="w-full bg-slate-900 p-2 rounded border border-amber-700/50 text-amber-400 font-mono focus:border-amber-500 outline-none"
+                               oninput="validateCapInput(this)" onblur="formatCapInput(this)" onchange="updateChart()">
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="document.getElementById('dcaAmount').value='10,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">1萬</button>
+                            <button onclick="document.getElementById('dcaAmount').value='30,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">3萬</button>
+                            <button onclick="document.getElementById('dcaAmount').value='50,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">5萬</button>
+                            <button onclick="document.getElementById('dcaAmount').value='100,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">10萬</button>
+                            <button onclick="document.getElementById('dcaAmount').value='300,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">30萬</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">初期本金於第 1 期一次投入，之後每期加投此金額</p>
                     </div>
                 </div>
             </div>
@@ -101,6 +127,94 @@
                     <span id="weightTotal" class="text-xs font-bold text-emerald-400">0%</span>
                 </div>
                 <div id="weightWarning" class="hidden mt-2 text-xs rounded px-2 py-1.5 border"></div>
+            </div>
+
+            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700/50 shadow-xl">
+                <h3 class="font-bold mb-4 text-amber-400 text-sm">5. 未來預測與財務自由 🔮</h3>
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">預期年化報酬率（用於未來月份投射）</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="projectedReturn" value="8" min="-50" max="50" step="0.5"
+                                   class="flex-1 bg-slate-900 p-2 rounded border border-slate-700 text-amber-400 focus:border-amber-500 outline-none"
+                                   onchange="updateChart()">
+                            <span class="text-xs text-slate-500">% / 年</span>
+                        </div>
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="document.getElementById('projectedReturn').value=-10;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-red-400 hover:bg-red-800">虧損 -10%</button>
+                            <button onclick="document.getElementById('projectedReturn').value=6;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">保守 6%</button>
+                            <button onclick="document.getElementById('projectedReturn').value=8;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">穩健 8%</button>
+                            <button onclick="document.getElementById('projectedReturn').value=10;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">積極 10%</button>
+                            <button onclick="document.getElementById('projectedReturn').value=15;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-emerald-400">高成長 15%</button>
+                            <button onclick="document.getElementById('projectedReturn').value=25;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-orange-400 hover:bg-orange-900">極度瘋狂 25%</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">S&P 500 歷史均值 ≈ 10%，含通膨保守估 6-8%</p>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">每月生活開銷（用於財務自由判斷）</label>
+                        <input type="text" id="monthlyExpense" value="50,000"
+                               class="w-full bg-slate-900 p-2 rounded border border-slate-700 text-amber-400 focus:border-amber-500 outline-none"
+                               oninput="validateCapInput(this)" onblur="formatCapInput(this)" onchange="updateChart()">
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="document.getElementById('monthlyExpense').value='30,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">3萬</button>
+                            <button onclick="document.getElementById('monthlyExpense').value='50,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">5萬</button>
+                            <button onclick="document.getElementById('monthlyExpense').value='80,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">8萬</button>
+                            <button onclick="document.getElementById('monthlyExpense').value='100,000';updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-amber-400">10萬</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">當被動收入 ≥ 每月開銷即視為財務自由 🎉</p>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">通膨率（每年開銷成長）</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="inflationRate" value="4" min="0" max="20" step="0.5"
+                                   class="flex-1 bg-slate-900 p-2 rounded border border-slate-700 text-orange-400 focus:border-orange-500 outline-none"
+                                   onchange="updateChart()">
+                            <span class="text-xs text-slate-500">% / 年</span>
+                        </div>
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="document.getElementById('inflationRate').value=0;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-orange-400">不考慮 0%</button>
+                            <button onclick="document.getElementById('inflationRate').value=2;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-orange-400">溫和 2%</button>
+                            <button onclick="document.getElementById('inflationRate').value=4;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-orange-400">一般 4%</button>
+                            <button onclick="document.getElementById('inflationRate').value=6;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-orange-400">偏高 6%</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">以今日開銷為基準，每年依通膨率遞增</p>
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">安全提領率 SWR（4% 法則標準）</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="swrRate" value="4" min="1" max="10" step="0.5"
+                                   class="flex-1 bg-slate-900 p-2 rounded border border-slate-700 text-cyan-400 focus:border-cyan-500 outline-none"
+                                   onchange="updateChart()">
+                            <span class="text-xs text-slate-500">% / 年</span>
+                        </div>
+                        <div class="flex gap-1.5 mt-2 flex-wrap">
+                            <button onclick="document.getElementById('swrRate').value=3;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-cyan-400">保守 3%</button>
+                            <button onclick="document.getElementById('swrRate').value=4;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-cyan-800/60 text-cyan-300 border border-cyan-600/40">4% 法則</button>
+                            <button onclick="document.getElementById('swrRate').value=5;updateChart()"
+                                    class="text-xs px-2 py-1 rounded bg-slate-700 text-slate-400 hover:text-cyan-400">積極 5%</button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">4% 法則（4% Rule）是一種退休規劃工具，主張退休首年提領總資產的 4%，之後每年根據通膨調整提領金額，可確保 30 年內不花光積蓄。</p>
+                    </div>
+                </div>
+                <div id="futureProjectionInfo" class="hidden mt-4 pt-3 border-t border-slate-700">
+                    <p id="projectionNote" class="text-xs text-amber-400"></p>
+                </div>
             </div>
 
             <button onclick="updateChart()"
@@ -129,7 +243,7 @@
                 <p class="text-xs text-slate-500 mt-1">以結束日期當月收盤計算，持有整段期間的組合損益</p>
                 <div class="mt-4 pt-3 border-t border-slate-600 flex items-center justify-between gap-4">
                     <div>
-                        <span class="text-xs text-slate-400 block mb-0.5">投入本金</span>
+                        <span id="principalLabel" class="text-xs text-slate-400 block mb-0.5">投入本金</span>
                         <p id="principalDisplay" class="text-2xl font-black text-slate-300">$0</p>
                     </div>
                     <div class="text-slate-500 text-2xl font-thin">→</div>
@@ -177,6 +291,50 @@
                     </table>
                 </div>
                 <p class="text-xs text-slate-500 mt-3">💡 一次買入為基準對照；DCA 將總金額平均分配至每期定投</p>
+            </div>
+
+            <div id="firePanel" class="hidden">
+                <div class="bg-gradient-to-r from-amber-900/30 to-emerald-900/30 p-6 rounded-xl border border-amber-500/50 shadow-xl">
+                    <h3 class="font-bold mb-3 text-amber-400 text-sm">🎯 財務自由試算</h3>
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">期末總資產</span>
+                            <span id="fireAssets" class="text-emerald-400 font-bold">$0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">年化成長率（資產增長）</span>
+                            <span id="fireReturnRate" class="text-amber-400 font-bold">8%</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">安全提領率 SWR</span>
+                            <span id="fireSWR" class="text-cyan-400 font-bold">4%</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">每月可提領收入（SWR 基準）</span>
+                            <span id="fireIncome" class="text-emerald-400 font-bold">$0</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span id="fireExpenseLabel" class="text-slate-400">每月生活開銷</span>
+                            <span id="fireExpense" class="text-red-400 font-bold">$0</span>
+                        </div>
+                        <div class="flex flex-col text-sm border-t border-slate-600/50 pt-2 mb-2">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">需達到的資產目標</span>
+                                <span id="fireRequiredAssets" class="text-amber-300 font-bold">$0</span>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <span class="text-slate-500">安全邊際 1.5x (建議)</span>
+                                <span id="fireSafeRequired" class="text-sky-400 font-bold">$0</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-sm border-t border-slate-600/50 pt-2">
+                            <span class="text-slate-400">每月盈餘 / 缺口</span>
+                            <span id="fireGap" class="font-bold">$0</span>
+                        </div>
+                    </div>
+                    <div id="fireResult" class="mt-4 p-3 rounded-lg text-center"></div>
+                    <p class="text-xs text-slate-500 mt-3">&#x1f4a1; <strong>4% 法則</strong>：每年提領資產的 4%，95% 機率能支擔 30 年以上且本金仍有成長空間。建議安全邊際 1.5 倍：被動收入應為開銷的 1.5 倍，多出的 0.5 倍應對極端通膀或醫療支出。</p>
+                </div>
             </div>
         </div>
     </div>
@@ -600,6 +758,16 @@ function buildCompareRow(label, periods, perPeriod, endAssets, endPct, plAmt, sy
 }
 
 function initInputs() {
+    // 設定預設日期：開始 = 1年前，結束 = 今日
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const oneYearAgo = new Date(today);
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const oneYearAgoStr = oneYearAgo.toISOString().slice(0, 10);
+    const endDateEl   = document.getElementById('endDate');
+    const startDateEl = document.getElementById('startDate');
+    if (endDateEl   && !endDateEl.value)   endDateEl.value   = todayStr;
+    if (startDateEl && !startDateEl.value) startDateEl.value = oneYearAgoStr;
     const container = document.getElementById('weightInputs');
     container.innerHTML = '';
     const categoryColors = { '美股': '#10b981', '台股': '#ec4899', '加密': '#f97316', '礦石': '#fbbf24' };
@@ -671,25 +839,81 @@ async function loadAllData() {
 
 function toggleDCAOptions() {
     const strategy = document.getElementById('strategyType').value;
-    const freqGroup = document.getElementById('dcaFreqGroup');
-    freqGroup.classList.toggle('hidden', strategy === 'lump');
+    const isDCA = strategy === 'dca';
+    document.getElementById('dcaFreqGroup').classList.toggle('hidden', !isDCA);
+    document.getElementById('dcaAmountGroup').classList.toggle('hidden', !isDCA);
+}
+
+function setEndDateOffset(years) {
+    const today = new Date();
+    const target = new Date(today.getFullYear() + years, today.getMonth(), today.getDate());
+    document.getElementById('endDate').value = target.toISOString().slice(0, 10);
+    toggleFutureSettings();
+    updateChart();
+}
+
+function toggleFutureSettings() {
+    const endStr = document.getElementById('endDate').value;
+    const curMonthKey = getCurrentMonthKey();
+    const endMonth = endStr.slice(0, 7);
+    const infoEl = document.getElementById('futureProjectionInfo');
+    if (infoEl) {
+        if (endMonth > curMonthKey) infoEl.classList.remove('hidden');
+        else infoEl.classList.add('hidden');
+    }
+}
+
+function getCurrentMonthKey() {
+    const today = new Date();
+    return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+}
+
+function projectFuturePrices(allPricesMap, labels, annualReturn) {
+    const curMonthKey = getCurrentMonthKey();
+    const monthlyRate = Math.pow(1 + annualReturn / 100, 1 / 12) - 1;
+    let futureStartIdx = labels.length;
+    for (let i = 0; i < labels.length; i++) {
+        if (labels[i] > curMonthKey) { futureStartIdx = i; break; }
+    }
+    if (futureStartIdx >= labels.length) return false;
+    let projected = false;
+    Object.keys(ASSET_CONFIG).forEach(name => {
+        const prices = allPricesMap[name];
+        let basePrice = null;
+        if (futureStartIdx > 0) {
+            for (let i = futureStartIdx - 1; i >= 0; i--) {
+                if (prices[i] > 0) { basePrice = prices[i]; break; }
+            }
+        }
+        if (!basePrice) {
+            const cache = priceCache[name];
+            if (cache && cache.size > 0) {
+                cache.forEach((p, k) => { if (p > 0) basePrice = p; });
+            }
+        }
+        if (!basePrice) basePrice = 100;
+        let price = basePrice;
+        for (let i = futureStartIdx; i < labels.length; i++) {
+            price *= (1 + monthlyRate);
+            prices[i] = price;
+            projected = true;
+        }
+    });
+    return projected;
 }
 
 /* --- DCA 計算核心 ---
- * 根據頻率決定哪幾個月要投入資金，將 totalCap 平均分配到每期，
- * 每期用當月價格買入各資產（按權重比例），最後按期末價格計算總資產。
- * 回傳格式：{ series: [各月的組合報酬率%], endPct, endAssets, periods, perPeriod }
+ * initialCap  : 初期投入本金（第 0 期一次投入）
+ * dcaPerPeriod : 每期定投金額
+ * compareMode  : true 時 totalCap = 總預算，均分所有期數（不使用 initialCap / dcaPerPeriod）
  */
-function calcDCA(totalCap, labels, weights, allPricesMap, freq) {
+function calcDCA(initialCap, dcaPerPeriod, labels, weights, allPricesMap, freq, compareMode) {
     const n = labels.length;
     if (n === 0) return null;
+    compareMode = compareMode === true;
 
-    // 決定哪些月份要投入（index list）
     const investIndices = [];
-    if (freq === 'weekly') {
-        // 月度資料無法表達每週，改用每月（最細粒度）
-        for (let i = 0; i < n; i++) investIndices.push(i);
-    } else if (freq === 'monthly') {
+    if (freq === 'weekly' || freq === 'monthly') {
         for (let i = 0; i < n; i++) investIndices.push(i);
     } else if (freq === 'quarterly') {
         for (let i = 0; i < n; i += 3) investIndices.push(i);
@@ -700,48 +924,60 @@ function calcDCA(totalCap, labels, weights, allPricesMap, freq) {
     }
     if (investIndices.length === 0) investIndices.push(0);
 
-    const periods   = investIndices.length;
-    const perPeriod = totalCap / periods;
+    const periods = investIndices.length;
+    // compareMode 保留舊行為：總預算均分
+    const compareBudget = initialCap; // compareMode 時 initialCap = totalCap
+    const perPeriod = compareMode ? compareBudget / periods : dcaPerPeriod;
+    const totalBudget = compareMode ? compareBudget : initialCap + dcaPerPeriod * periods;
 
-    // 每資產累積持有的「份額」
     const shares = {};
     Object.keys(ASSET_CONFIG).forEach(name => { shares[name] = 0; });
 
     let totalInvested = 0;
-    const series = [];
+    const series      = [];
+    const valueSeries = [];
 
     for (let i = 0; i < n; i++) {
-        // 本月是否為投入月？
-        if (investIndices.includes(i)) {
-            totalInvested += perPeriod;
+        // 每期投入金額
+        let investThisPeriod = 0;
+        if (compareMode) {
+            if (investIndices.includes(i)) investThisPeriod = perPeriod;
+        } else {
+            if (i === 0) {
+                // 第 0 期：初始本金 + 若第 0 期也是定投期則加上 DCA
+                investThisPeriod = initialCap + (investIndices.includes(0) ? dcaPerPeriod : 0);
+            } else if (investIndices.includes(i)) {
+                investThisPeriod = dcaPerPeriod;
+            }
+        }
+
+        if (investThisPeriod > 0) {
+            totalInvested += investThisPeriod;
             Object.keys(ASSET_CONFIG).forEach(name => {
                 const w = weights[name] || 0;
                 if (w <= 0) return;
                 const price = allPricesMap[name][i];
-                if (price && price > 0) {
-                    shares[name] += (perPeriod * w) / price;
-                }
+                if (price && price > 0) shares[name] += (investThisPeriod * w) / price;
             });
         }
-        // 計算本月市值
+
         let currentVal = 0;
         Object.keys(ASSET_CONFIG).forEach(name => {
             const price = allPricesMap[name][i];
-            if (price && price > 0) {
-                currentVal += shares[name] * price;
-            }
+            if (price && price > 0) currentVal += shares[name] * price;
         });
-        // 加上尚未投入的現金部分（尚未到投入期的金額）
-        const cashRemaining = totalCap - totalInvested;
-        currentVal += Math.max(0, cashRemaining);
-
-        const pct = totalCap > 0 ? ((currentVal / totalCap) - 1) * 100 : 0;
+        if (compareMode) {
+            currentVal += Math.max(0, totalBudget - totalInvested);
+        }
+        const base = compareMode ? totalBudget : (totalInvested > 0 ? totalInvested : 1);
+        const pct  = base > 0 ? (currentVal / base - 1) * 100 : 0;
         series.push(parseFloat(pct.toFixed(2)));
+        valueSeries.push(currentVal);
     }
 
     const endPct    = series[series.length - 1];
-    const endAssets = totalCap * (1 + endPct / 100);
-    return { series, endPct, endAssets, periods, perPeriod };
+    const endAssets = valueSeries[valueSeries.length - 1];
+    return { series, valueSeries, endPct, endAssets, periods, perPeriod: compareMode ? perPeriod : dcaPerPeriod, totalBudget, initialCap: compareMode ? 0 : initialCap };
 }
 
 function updateChart() {
@@ -752,10 +988,16 @@ function updateChart() {
 
     const strategy  = document.getElementById('strategyType').value;
     const dcaFreq   = document.getElementById('dcaFrequency').value;
+    const dcaAmount = parseFloat((document.getElementById('dcaAmount').value || '0').replace(/,/g, '')) || 0;
+    const annualReturn = parseFloat(document.getElementById('projectedReturn').value) || 0;
+    const swrRate = parseFloat(document.getElementById('swrRate')?.value) || 4;
+    const monthlyExpense = parseFloat((document.getElementById('monthlyExpense').value || '0').replace(/,/g, '')) || 0;
+    const inflationRate = parseFloat(document.getElementById('inflationRate').value) || 0;
 
     const labels     = getMonthLabels(startStr, endStr);
     const numPoints  = labels.length;
     const showPoints = numPoints <= 24;
+    const curMonthKey = getCurrentMonthKey();
 
     const weights = {};
     let totalW = 0;
@@ -799,20 +1041,50 @@ function updateChart() {
     // 各資產各月「絕對價格」供 DCA 計算
     const allPricesMap = {};
 
+    // Step 1: Get real prices
     Object.keys(ASSET_CONFIG).forEach(name => {
-        const cfg    = ASSET_CONFIG[name];
         const prices = getMonthlyPrices(name, labels);
         allPricesMap[name] = fillNullPrices(prices);
-        const pct    = pricesToPct(prices);
+    });
+
+    // Step 2: Project future months
+    const hasProjection = projectFuturePrices(allPricesMap, labels, annualReturn);
+
+    // Step 3: Update projection info
+    const wtSym2 = currency === 'TWD' ? 'NT$' : '$';
+    const projInfoEl = document.getElementById('futureProjectionInfo');
+    const projNoteEl = document.getElementById('projectionNote');
+    if (hasProjection && projInfoEl && projNoteEl) {
+        projInfoEl.classList.remove('hidden');
+        const futureMonths = labels.filter(l => l > curMonthKey).length;
+        const futureYears = (futureMonths / 12).toFixed(1);
+        projNoteEl.textContent = '📈 未來 ' + futureMonths + ' 個月（≈' + futureYears + ' 年）以年化 ' + annualReturn + '% 投射';
+    } else if (projInfoEl) {
+        projInfoEl.classList.add('hidden');
+    }
+
+    // Find future boundary index for chart styling
+    let futureBoundaryIdx = labels.length;
+    for (let i = 0; i < labels.length; i++) {
+        if (labels[i] > curMonthKey) { futureBoundaryIdx = i; break; }
+    }
+
+    // Step 4: Calculate pct series and build datasets
+    Object.keys(ASSET_CONFIG).forEach(name => {
+        const cfg = ASSET_CONFIG[name];
+        const pct = pricesToPct(allPricesMap[name]);
         allPctSeries[name] = pct;
         if ((weights[name] || 0) <= 0) return;
         if (strategy === 'lump' || strategy === 'compare') {
             datasets.push({
                 label: name, data: fillNulls(pct),
-                actualPrices: prices, actualCurrency: cfg.currency,
+                actualPrices: allPricesMap[name], actualCurrency: cfg.currency,
                 borderColor: cfg.color, backgroundColor: 'transparent',
                 fill: false, tension: 0.4, borderWidth: 2,
-                pointRadius: showPoints ? 3 : 0, pointBackgroundColor: cfg.color
+                pointRadius: showPoints ? 3 : 0, pointBackgroundColor: cfg.color,
+                segment: hasProjection ? {
+                    borderDash: function(ctx) { return ctx.p0DataIndex >= futureBoundaryIdx - 1 ? [4, 4] : undefined; }
+                } : undefined
             });
         }
     });
@@ -833,6 +1105,7 @@ function updateChart() {
     });
 
     let portfolioSeries = lumpSeries; // 預設用 lump
+    let activeDcaResult = null;        // 單一 DCA 模式的結果
 
     if (strategy === 'lump' || strategy === 'compare') {
         datasets.push({
@@ -861,10 +1134,10 @@ function updateChart() {
         };
 
         if (strategy === 'compare') {
-            // 比較模式：顯示所有 DCA 頻率
+            // 比較模式：totalCap = 總預算，均分各期（compareMode = true）
             const freqs = ['monthly', 'quarterly', 'semiannual', 'annual'];
             freqs.forEach(f => {
-                const dcaResult = calcDCA(totalCap, labels, weights, allPricesMap, f);
+                const dcaResult = calcDCA(totalCap, 0, labels, weights, allPricesMap, f, true);
                 if (!dcaResult) return;
                 datasets.push({
                     label: 'DCA ' + dcaLabelsMap[f],
@@ -876,13 +1149,14 @@ function updateChart() {
                 });
             });
         } else {
-            // 單一 DCA 模式
-            const dcaResult = calcDCA(totalCap, labels, weights, allPricesMap, dcaFreq);
-            if (dcaResult) {
-                portfolioSeries = dcaResult.series;
+            // 單一 DCA 模式：initialCap + 每期 dcaAmount
+            activeDcaResult = calcDCA(totalCap, dcaAmount, labels, weights, allPricesMap, dcaFreq, false);
+            if (activeDcaResult) {
+                portfolioSeries = activeDcaResult.series;
                 datasets.push({
-                    label: 'DCA ' + dcaLabelsMap[dcaFreq] + ' 組合',
-                    data: dcaResult.series,
+                    label: 'DCA ' + dcaLabelsMap[dcaFreq] + ' 組合（每期 ' + wtSym + Math.round(dcaAmount).toLocaleString() + '）',
+                    data: activeDcaResult.series,
+                    valueSeries: activeDcaResult.valueSeries,
                     borderColor: dcaColors[dcaFreq] || '#a78bfa',
                     backgroundColor: 'rgba(167,139,250,0.04)',
                     fill: true, tension: 0.4, borderWidth: 3, borderDash: [6, 3],
@@ -908,7 +1182,7 @@ function updateChart() {
         // 各 DCA 頻率
         ['monthly', 'quarterly', 'semiannual', 'annual'].forEach(f => {
             const nameMap = { monthly: '每月', quarterly: '每季', semiannual: '每半年', annual: '每年' };
-            const dcaR = calcDCA(totalCap, labels, weights, allPricesMap, f);
+            const dcaR = calcDCA(totalCap, 0, labels, weights, allPricesMap, f, true);
             if (!dcaR) return;
             tbody.innerHTML += buildCompareRow(
                 'DCA ' + nameMap[f], dcaR.periods,
@@ -927,11 +1201,26 @@ function updateChart() {
     const maxDd   = Math.min(...portfolioSeries);
     const endPct  = portfolioSeries[portfolioSeries.length - 1];
     const sym = currency === 'TWD' ? 'NT$' : '$';
-    document.getElementById('principalDisplay').textContent = sym + Math.round(totalCap).toLocaleString();
+
+    // investedTotal：一次買入 = totalCap；DCA = 初始本金 + 每期金額 × 期數
+    const investedTotal = (strategy === 'dca' && activeDcaResult) ? activeDcaResult.totalBudget : totalCap;
+
+    // 更新「投入本金」標籤
+    const principalLabelEl = document.getElementById('principalLabel');
+    if (principalLabelEl) {
+        if (strategy === 'dca' && activeDcaResult) {
+            const parts = [];
+            if (totalCap > 0) parts.push('初始 ' + sym + Math.round(totalCap).toLocaleString());
+            if (dcaAmount > 0) parts.push(activeDcaResult.periods + ' 期 × ' + sym + Math.round(dcaAmount).toLocaleString());
+            principalLabelEl.textContent = '累計投入本金（' + parts.join(' + ') + '）';
+        } else {
+            principalLabelEl.textContent = '投入本金';
+        }
+    }
+    document.getElementById('principalDisplay').textContent = sym + Math.round(investedTotal).toLocaleString();
     const endPctEl   = document.getElementById('endPctDisplay');
     const endMoneyEl = document.getElementById('endMoneyDisplay');
 
-    // 先用月均價顯示，再用精確日線修正
     function updatePnLDisplay(startPrices, endPrices) {
         let exactEndPct = null;
         if (startPrices && endPrices && Object.keys(startPrices).length > 0) {
@@ -949,53 +1238,204 @@ function updateChart() {
         }
         const pct = exactEndPct !== null ? exactEndPct : endPct;
         endPctEl.textContent   = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
-        endMoneyEl.textContent = (pct >= 0 ? '+' : '-') + formatMoneyAmt(totalCap * Math.abs(pct) / 100);
+        endMoneyEl.textContent = (pct >= 0 ? '+' : '-') + formatMoneyAmt(investedTotal * Math.abs(pct) / 100);
         endPctEl.className   = 'text-4xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
         endMoneyEl.className = 'text-2xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
-        const currentAssets = totalCap * (1 + pct / 100);
+        const currentAssets = investedTotal * (1 + pct / 100);
         const curEl = document.getElementById('currentAssetsDisplay');
         curEl.textContent = sym + Math.round(currentAssets).toLocaleString();
         curEl.className   = 'text-2xl font-black ' + (pct >= 0 ? 'text-emerald-400' : 'text-red-400');
-        if (exactEndPct !== null) console.log('✅ 精確日線損益：' + pct.toFixed(2) + '%（月均損益：' + endPct.toFixed(2) + '%）');
     }
 
-    // 先以月均顯示
     updatePnLDisplay(null, null);
 
-    // 非同步抓精確日線，完成後更新
-    Promise.all([
-        fetchDailyPrices(startStr),
-        fetchDailyPrices(endStr)
-    ]).then(([startPrices, endPrices]) => {
-        // 更新圖表第一個點（開始日）的精確價格
-        if (startPrices && chartInstance) {
-            chartInstance.data.datasets.forEach(ds => {
-                if (!ds.actualPrices || !ds.label) return;
-                const assetName = Object.keys(ASSET_CONFIG).find(n => ds.label.startsWith(n));
-                if (assetName && startPrices[assetName]) {
-                    ds.actualPrices[0] = startPrices[assetName];
-                }
-            });
-            chartInstance.update('none');
-        }
-        updatePnLDisplay(startPrices, endPrices);
-    });
+    // 只在非全未來模式、且非 DCA 模式下抓精確日線
+    // （DCA 分批買入，起始價格無法代表整體成本）
+    if (!hasProjection && strategy !== 'dca' && labels[0] <= curMonthKey) {
+        const endDateForDaily = endStr > new Date().toISOString().slice(0, 10) ? new Date().toISOString().slice(0, 10) : endStr;
+        Promise.all([
+            fetchDailyPrices(startStr),
+            fetchDailyPrices(endDateForDaily)
+        ]).then(([startPrices, endPrices]) => {
+            if (startPrices && chartInstance) {
+                chartInstance.data.datasets.forEach(ds => {
+                    if (!ds.actualPrices || !ds.label) return;
+                    const assetName = Object.keys(ASSET_CONFIG).find(n => ds.label.startsWith(n));
+                    if (assetName && startPrices[assetName]) ds.actualPrices[0] = startPrices[assetName];
+                });
+                chartInstance.update('none');
+            }
+            updatePnLDisplay(startPrices, endPrices);
+        });
+    }
 
     const gainEl = document.getElementById('maxGainPctDisplay');
     gainEl.textContent = (maxGain >= 0 ? '+' : '') + maxGain.toFixed(2) + '%';
     gainEl.className   = 'text-2xl font-black ' + (maxGain >= 0 ? 'text-emerald-400' : 'text-red-400');
     document.getElementById('maxGainDisplay').textContent =
-        (maxGain >= 0 ? '+' : '-') + formatMoneyAmt(totalCap * Math.abs(maxGain) / 100);
+        (maxGain >= 0 ? '+' : '-') + formatMoneyAmt(investedTotal * Math.abs(maxGain) / 100);
     const maxPctEl = document.getElementById('maxPctDisplay');
     maxPctEl.textContent = maxDd.toFixed(2) + '%';
     maxPctEl.className   = 'text-2xl font-black text-red-500';
     document.getElementById('maxLossDisplay').textContent =
-        (maxDd >= 0 ? '+' : '-') + formatMoneyAmt(totalCap * Math.abs(maxDd) / 100);
+        (maxDd >= 0 ? '+' : '-') + formatMoneyAmt(investedTotal * Math.abs(maxDd) / 100);
+
+    // ═══ 財務自由試算 ═══
+    // 通膨調整：以今日開銷為基準，計算任意月份的通膨後開銷
+    function getInflatedExpense(base, yearMonthLabel) {
+        if (inflationRate === 0) return base;
+        const today = new Date();
+        const [y, m] = yearMonthLabel.split('-').map(Number);
+        const monthsFromToday = (y - today.getFullYear()) * 12 + (m - (today.getMonth() + 1));
+        return base * Math.pow(1 + inflationRate / 100, monthsFromToday / 12);
+    }
+
+    const firePanel = document.getElementById('firePanel');
+    const fireToday = new Date(); // 供 FIRE 區塊各處使用
+    if (monthlyExpense > 0) {
+        firePanel.classList.remove('hidden');
+        // 期末資產市值
+        const endPortfolioVal = (strategy === 'dca' && activeDcaResult)
+            ? activeDcaResult.endAssets
+            : investedTotal * (1 + endPct / 100);
+
+        // 期末通膨調整後開銷
+        const endLabel = labels[labels.length - 1];
+        const endAdjExpense = getInflatedExpense(monthlyExpense, endLabel);
+
+        // ═══ 4% 法則（三一學院 SWR）═══
+        // 所需資產 = 年開銷 ÷ SWR = 月開銷 × 12 / swrDecimal
+        // 每月可永續提領 = 資產 × swrRate% ÷ 12
+        const swrDecimal     = swrRate / 100;                     // e.g. 0.04
+        const requiredAssets = endAdjExpense * 12 / swrDecimal;   // 期末所需目標資產
+        const safeRequired   = requiredAssets * 1.5;              // 安全邊際 1.5x
+        const endSWRIncome   = endPortfolioVal * swrDecimal / 12; // 期末每月可提領
+
+        // 更新開銷標籤
+        const expLabelEl = document.getElementById('fireExpenseLabel');
+        if (expLabelEl) expLabelEl.textContent = inflationRate > 0 ? '期末開銷（含通膨 ' + inflationRate + '%）' : '每月生活開銷';
+
+        document.getElementById('fireAssets').textContent          = sym + Math.round(endPortfolioVal).toLocaleString();
+        document.getElementById('fireReturnRate').textContent       = annualReturn + '%';
+        document.getElementById('fireSWR').textContent             = swrRate + '%（需資產 ' + Math.round(1 / swrDecimal) + ' 倍年開銷）';
+        document.getElementById('fireIncome').textContent          = sym + Math.round(endSWRIncome).toLocaleString();
+        document.getElementById('fireExpense').textContent         = sym + Math.round(endAdjExpense).toLocaleString() +
+            (inflationRate > 0 ? ' （今日 ' + sym + Math.round(monthlyExpense).toLocaleString() + '）' : '');
+        document.getElementById('fireRequiredAssets').textContent  = sym + Math.round(requiredAssets).toLocaleString();
+        document.getElementById('fireSafeRequired').textContent    = sym + Math.round(safeRequired).toLocaleString();
+
+        const gap   = endSWRIncome - endAdjExpense;
+        const gapEl = document.getElementById('fireGap');
+        gapEl.textContent = (gap >= 0 ? '+' : '') + sym + Math.round(gap).toLocaleString();
+        gapEl.className   = 'font-bold ' + (gap >= 0 ? 'text-emerald-400' : 'text-red-400');
+
+        // ═══ 逐月掃描：資產 ≥ 當月所需資產（4% Rule）即達成 FIRE ═══
+        let fireMonth = null, fireAssetVal = 0, fireAdjExpenseAtDate = 0;
+        for (let i = 0; i < labels.length; i++) {
+            const val = (strategy === 'dca' && activeDcaResult)
+                ? activeDcaResult.valueSeries[i]
+                : investedTotal * (1 + portfolioSeries[i] / 100);
+            const adjExp     = getInflatedExpense(monthlyExpense, labels[i]);
+            const reqForMth  = adjExp * 12 / swrDecimal; // 該月所需資產目標
+            if (val >= reqForMth) { fireMonth = labels[i]; fireAssetVal = val; fireAdjExpenseAtDate = adjExp; break; }
+        }
+
+        const resultEl = document.getElementById('fireResult');
+
+        // 進度：期末資產 ÷ 所需資產
+        const rawProgress     = requiredAssets > 0 ? (endPortfolioVal / requiredAssets) * 100 : 0;
+        const incomeProgress  = Math.min(rawProgress, 100);
+        const safeProgress    = requiredAssets > 0 ? Math.min(endPortfolioVal / safeRequired * 100, 100) : 0;
+        const safePct         = (endPortfolioVal / safeRequired * 100).toFixed(1);
+
+        function progressColor(pct) {
+            if (pct >= 100) return '#10b981';
+            if (pct >= 80)  return '#f59e0b';
+            if (pct >= 50)  return '#f97316';
+            return '#ef4444';
+        }
+        const barColor      = progressColor(rawProgress);
+        const safeBarColor  = progressColor(parseFloat(safePct));
+
+        const progressBar =
+            '<div class="mt-3">' +
+            '<div class="flex justify-between text-xs mb-1">' +
+            '<span class="text-slate-400">4% 法則進度（資產 ÷ 選標' + (inflationRate > 0 ? '，含通膨' : '') + '）</span>' +
+            '<span style="color:' + barColor + '" class="font-bold">' + rawProgress.toFixed(1) + '%</span>' +
+            '</div>' +
+            '<div class="w-full bg-slate-700 rounded-full h-4 overflow-hidden">' +
+            '<div style="width:' + incomeProgress + '%;background:' + barColor + ';transition:width 0.6s ease" class="h-4 rounded-full flex items-center justify-end pr-1">' +
+            (incomeProgress > 15 ? '<span class="text-xs font-black text-slate-900">' + Math.round(rawProgress) + '%</span>' : '') +
+            '</div>' +
+            '</div>' +
+            '<div class="flex justify-between text-xs mt-1" style="color:' + barColor + ';opacity:0.8">' +
+            '<span>0</span>' +
+            '<span>還差 ' + sym + Math.round(Math.max(0, requiredAssets - endPortfolioVal)).toLocaleString() + '</span>' +
+            '<span>🌏 ' + sym + Math.round(requiredAssets).toLocaleString() + '</span>' +
+            '</div>' +
+            '<div class="flex justify-between text-xs mb-1 mt-3">' +
+            '<span class="text-slate-400">安全邊際 1.5x 進度（建議目標）</span>' +
+            '<span style="color:' + safeBarColor + '" class="font-bold">' + safePct + '%</span>' +
+            '</div>' +
+            '<div class="w-full bg-slate-700 rounded-full h-3 overflow-hidden">' +
+            '<div style="width:' + safeProgress + '%;background:' + safeBarColor + ';opacity:0.7;transition:width 0.6s ease" class="h-3 rounded-full"></div>' +
+            '</div>' +
+            '<div class="flex justify-between text-xs mt-1" style="color:' + safeBarColor + ';opacity:0.8">' +
+            '<span>0</span>' +
+            (safeRequired > endPortfolioVal ? '<span>還差 ' + sym + Math.round(safeRequired - endPortfolioVal).toLocaleString() + '</span>' : '') +
+            '<span>🛡️ ' + sym + Math.round(safeRequired).toLocaleString() + '</span>' +
+            '</div>' +
+            '</div>';
+
+        if (fireMonth) {
+            const fireSWRIncome = fireAssetVal * swrDecimal / 12;
+            const nowY = fireToday.getFullYear(), nowM = fireToday.getMonth() + 1;
+            const [fireY, fireMo] = fireMonth.split('-').map(Number);
+            const totalMonthsLeft = (fireY - nowY) * 12 + (fireMo - nowM);
+            const yearsLeft  = Math.floor(totalMonthsLeft / 12);
+            const monthsLeft = totalMonthsLeft % 12;
+            let timeLeftStr = '';
+            if (totalMonthsLeft <= 0) {
+                timeLeftStr = '已達成！';
+            } else if (yearsLeft === 0) {
+                timeLeftStr = '還剩 <strong>' + monthsLeft + ' 個月</strong>';
+            } else if (monthsLeft === 0) {
+                timeLeftStr = '還剩 <strong>' + yearsLeft + ' 年</strong>';
+            } else {
+                timeLeftStr = '還剩 <strong>' + yearsLeft + ' 年 ' + monthsLeft + ' 個月</strong>';
+            }
+            resultEl.innerHTML =
+                '<div class="text-emerald-400 font-black text-lg">🎉 恭喜！預計 ' + fireMonth + ' 達成財務自由！</div>' +
+                '<div class="inline-flex items-center gap-2 mt-2 px-3 py-1.5 rounded-full bg-emerald-800/50 border border-emerald-500/40">' +
+                '<span class="text-xl">⏱️</span>' +
+                '<span class="text-emerald-300 text-sm">' + timeLeftStr + '（距今 ' + totalMonthsLeft + ' 個月）</span>' +
+                '</div>' +
+                '<p class="text-sm text-slate-300 mt-2">屆時總資產 ' + sym + Math.round(fireAssetVal).toLocaleString() +
+                '，4% 法則每月可提領 ' + sym + Math.round(fireSWRIncome).toLocaleString() +
+                ' ≥ ' + (inflationRate > 0 ? '通膨後' : '') + '開銷 ' + sym + Math.round(fireAdjExpenseAtDate).toLocaleString() + '</p>' +
+                (inflationRate > 0 ? '<p class="text-xs text-slate-500 mt-0.5">（今日開銷 ' + sym + Math.round(monthlyExpense).toLocaleString() + '，以 ' + inflationRate + '% 通膨計算至達成日）</p>' : '') +
+                progressBar;
+            resultEl.className = 'mt-4 p-3 rounded-lg text-left bg-emerald-900/30 border border-emerald-500/50';
+        } else {
+            resultEl.innerHTML =
+                '<div class="text-amber-400 font-bold">⏳ 在此期間內尚未達成財務自由</div>' +
+                '<p class="text-sm text-slate-400 mt-1">期末資產 ' + sym + Math.round(endPortfolioVal).toLocaleString() +
+                ' / 目標 ' + sym + Math.round(requiredAssets).toLocaleString() +
+                '（達到 ' + rawProgress.toFixed(1) + '%）</p>' +
+                progressBar;
+            resultEl.className = 'mt-4 p-3 rounded-lg text-left bg-amber-900/20 border border-amber-500/30';
+        }
+    } else {
+        firePanel.classList.add('hidden');
+    }
+
+    // ═══ 繪製圖表 ═══
+    const chartLabels = labels.map(l => l > curMonthKey ? l + ' ⟡' : l);
 
     const ctx = document.getElementById('portfolioChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
     chartInstance = new Chart(ctx, {
-        type: 'line', data: { labels: labels, datasets: datasets },
+        type: 'line', data: { labels: chartLabels, datasets: datasets },
         options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
@@ -1016,6 +1456,10 @@ function updateChart() {
                 },
                 tooltip: {
                     callbacks: {
+                        title: function(items) {
+                            const raw = items[0]?.label || '';
+                            return raw.replace(' ⟡', '') + (raw.includes('⟡') ? '（預測）' : '');
+                        },
                         label: ctx => {
                             const v    = ctx.parsed.y !== undefined ? ctx.parsed.y.toFixed(1) : '0.0';
                             const sign = Number(v) >= 0 ? '+' : '';
@@ -1040,6 +1484,12 @@ function updateChart() {
                                     str += ' (' + priceStr + ')';
                                 }
                             }
+                            const pctVal = ctx.parsed.y || 0;
+                            // DCA 模式：直接用 valueSeries 中的真實市值，避免用累計本金推算導致偏差
+                            const assetVal = (ctx.dataset.valueSeries && ctx.dataset.valueSeries[ctx.dataIndex] != null)
+                                ? ctx.dataset.valueSeries[ctx.dataIndex]
+                                : investedTotal * (1 + pctVal / 100);
+                            str += '　→ ' + sym + Math.round(assetVal).toLocaleString();
                             return str;
                         }
                     }
@@ -1051,6 +1501,7 @@ function updateChart() {
 
 window.onload = async function() {
     initInputs();
+    toggleFutureSettings();
     await loadAllData();
     updateChart();
 };
