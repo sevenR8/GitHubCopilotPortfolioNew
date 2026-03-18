@@ -295,7 +295,7 @@
 
             <div id="firePanel" class="hidden">
                 <div class="bg-gradient-to-r from-amber-900/30 to-emerald-900/30 p-6 rounded-xl border border-amber-500/50 shadow-xl">
-                    <h3 class="font-bold mb-3 text-amber-400 text-sm">🎯 財務自由試算</h3>
+                    <h3 class="font-bold mb-5 text-amber-400 text-base">🎯 財務自由試算</h3>
                     <div class="space-y-2">
                         <div class="flex justify-between text-sm">
                             <span class="text-slate-400">期末總資產</span>
@@ -305,7 +305,7 @@
                             <span class="text-slate-400">年化成長率（資產增長）</span>
                             <span id="fireReturnRate" class="text-amber-400 font-bold">8%</span>
                         </div>
-                        <div class="flex justify-between text-sm">
+                        <div class="flex justify-between text-sm border-b border-slate-600/50 pb-2 mb-2">
                             <span class="text-slate-400">安全提領率 SWR</span>
                             <span id="fireSWR" class="text-cyan-400 font-bold">4%</span>
                         </div>
@@ -1313,14 +1313,13 @@ function updateChart() {
 
         // 更新開銷標籤
         const expLabelEl = document.getElementById('fireExpenseLabel');
-        if (expLabelEl) expLabelEl.textContent = inflationRate > 0 ? '期末開銷（含通膨 ' + inflationRate + '%）' : '每月生活開銷';
+        if (expLabelEl) expLabelEl.textContent = inflationRate > 0 ? '期末每月開銷（含通膨 ' + inflationRate + '%）' : '每月生活開銷';
 
         document.getElementById('fireAssets').textContent          = sym + Math.round(endPortfolioVal).toLocaleString();
         document.getElementById('fireReturnRate').textContent       = annualReturn + '%';
-        document.getElementById('fireSWR').textContent             = swrRate + '%（需資產 ' + Math.round(1 / swrDecimal) + ' 倍年開銷）';
+        document.getElementById('fireSWR').textContent             = swrRate + '%';
         document.getElementById('fireIncome').textContent          = sym + Math.round(endSWRIncome).toLocaleString();
-        document.getElementById('fireExpense').textContent         = sym + Math.round(endAdjExpense).toLocaleString() +
-            (inflationRate > 0 ? ' （今日 ' + sym + Math.round(monthlyExpense).toLocaleString() + '）' : '');
+        document.getElementById('fireExpense').textContent         = sym + Math.round(endAdjExpense).toLocaleString();
         document.getElementById('fireRequiredAssets').textContent  = sym + Math.round(requiredAssets).toLocaleString();
         document.getElementById('fireSafeRequired').textContent    = sym + Math.round(safeRequired).toLocaleString();
 
