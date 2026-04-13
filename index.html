@@ -254,23 +254,9 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-emerald-900/30 p-4 rounded-xl border border-emerald-500/50">
-                    <span class="text-xs text-emerald-300 block mb-1">📈 組合最大獲利率</span>
-                    <p id="maxGainPctDisplay" class="text-2xl font-black text-emerald-400">+0%</p>
-                </div>
-                <div class="bg-emerald-900/20 p-4 rounded-xl border border-emerald-700/50">
-                    <span class="text-xs text-emerald-300 block mb-1">📈 帳面最大獲利</span>
-                    <p id="maxGainDisplay" class="text-2xl font-black text-emerald-400">+$0</p>
-                </div>
-                <div class="bg-red-900/30 p-4 rounded-xl border border-red-500/50">
-                    <span class="text-xs text-red-300 block mb-1">📉 組合最大回撤率</span>
-                    <p id="maxPctDisplay" class="text-2xl font-black text-red-500">0%</p>
-                </div>
-                <div class="bg-red-900/30 p-4 rounded-xl border border-red-500/50">
-                    <span class="text-xs text-red-300 block mb-1">📉 帳面最大虧損</span>
-                    <p id="maxLossDisplay" class="text-2xl font-black text-red-500">-$0</p>
-                </div>
+            <div class="bg-sky-900/30 p-4 rounded-xl border border-sky-500/50">
+                <span class="text-xs text-sky-300 block mb-1">📊 年化報酬率（CAGR）</span>
+                <p id="cagrDisplay" class="text-2xl font-black text-sky-400">0%</p>
             </div>
 
             <div id="dcaComparePanel" class="hidden bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
@@ -1193,10 +1179,14 @@ function updateChart() {
     // 使用的主系列（lump 或 dca）
     if (strategy === 'compare') portfolioSeries = lumpSeries;
 
-    const maxGain = Math.max(...portfolioSeries);
-    const maxDd   = Math.min(...portfolioSeries);
     const endPct  = portfolioSeries[portfolioSeries.length - 1];
     const sym = currency === 'TWD' ? 'NT$' : '$';
+    
+    // 計算年化報酬率 CAGR
+    const startDate = new Date(startStr);
+    const endDate = new Date(endStr);
+    const years = (endDate - startDate) / (1000 * 60 * 60 * 24 * 365.25);
+    const cagr = years > 0 ? (Math.pow(1 + endPct / 100, 1 / years) - 1) * 100 : 0;
 
     // investedTotal：一次買入 = totalCap；DCA = 初始本金 + 每期金額 × 期數
     const investedTotal = (strategy === 'dca' && activeDcaResult) ? activeDcaResult.totalBudget : totalCap;
@@ -1271,16 +1261,10 @@ function updateChart() {
         });
     }
 
-    const gainEl = document.getElementById('maxGainPctDisplay');
-    gainEl.textContent = (maxGain >= 0 ? '+' : '') + maxGain.toFixed(2) + '%';
-    gainEl.className   = 'text-2xl font-black ' + (maxGain >= 0 ? 'text-emerald-400' : 'text-red-400');
-    document.getElementById('maxGainDisplay').textContent =
-        (maxGain >= 0 ? '+' : '-') + formatMoneyAmt(investedTotal * Math.abs(maxGain) / 100);
-    const maxPctEl = document.getElementById('maxPctDisplay');
-    maxPctEl.textContent = maxDd.toFixed(2) + '%';
-    maxPctEl.className   = 'text-2xl font-black text-red-500';
-    document.getElementById('maxLossDisplay').textContent =
-        (maxDd >= 0 ? '+' : '-') + formatMoneyAmt(investedTotal * Math.abs(maxDd) / 100);
+    // 更新 CAGR 顯示
+    const cagrEl = document.getElementById('cagrDisplay');
+    cagrEl.textContent = (cagr >= 0 ? '+' : '') + cagr.toFixed(2) + '%';
+    cagrEl.className = 'text-2xl font-black ' + (cagr >= 0 ? 'text-sky-400' : 'text-red-400');
 
     // ═══ 財務自由試算 ═══
     // 通膨調整：以今日開銷為基準，計算任意月份的通膨後開銷
